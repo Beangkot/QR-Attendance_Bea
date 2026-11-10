@@ -1,15 +1,20 @@
-import { MaterialIcons } from '@expo/vector-icons';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
 import { COLORS } from '@/constants/colors';
+import { SHADOW } from '@/constants/theme';
 
 type Props = { title: string };
 
+// Shows your own logo (assets/images/icon.png) instead of the old graduation-cap icon.
 export default function Header({ title }: Props) {
   return (
     <View style={styles.container}>
-      <View style={styles.logoCircle}>
-        <MaterialIcons name="school" size={36} color={COLORS.primary} />
+      <View style={styles.logoShadow}>
+        <Image
+          source={require('../assets/images/icon.png')}
+          style={styles.logo}
+          resizeMode="cover"
+        />
       </View>
       <Text style={styles.title}>{title}</Text>
     </View>
@@ -19,16 +24,20 @@ export default function Header({ title }: Props) {
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 16,
   },
-  logoCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: COLORS.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
+  logoShadow: {
+    ...SHADOW.card,
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    backgroundColor: '#000000',
     marginBottom: 12,
+  },
+  logo: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
   },
   title: {
     fontSize: 24,
