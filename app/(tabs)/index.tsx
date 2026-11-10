@@ -55,7 +55,7 @@ export default function Index() {
         </View>
       ))}
 
-      <Text style={styles.credit}>Developed by: Cristy Mae V. Bargamento</Text>
+      <Text style={styles.credit}>Developed by: Mariniel L. Caserial</Text>
     </ScrollView>
   );
 }

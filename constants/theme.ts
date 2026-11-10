@@ -1,6 +1,6 @@
-export const GRADIENT = ['#2400FF', '#9B00E8', '#F7008A'] as const;
+export const GRADIENT = ['#329cda', '#b74b81', '#c90072'] as const;
 // Pastel screen background: pink -> lavender -> aqua
-export const BG_GRADIENT = ['#FFC8EE', '#DDA8FF', '#BBFFFF'] as const;
+export const BG_GRADIENT = ['#e86dfa', '#f880c0', '#e86dfa'] as const;
 export const BG_START = { x: 0, y: 0 };
 export const BG_END = { x: 1, y: 1 };
 
