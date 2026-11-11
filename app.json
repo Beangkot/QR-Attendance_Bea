@@ -19,7 +19,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.marinielcaserial.qratt",
+      "package": "com.beangkot.qratt",
       "permissions": [
         "android.permission.CAMERA"
       ]
