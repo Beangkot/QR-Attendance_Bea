@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { COLORS } from '@/constants/colors';
 import { SHADOW } from '@/constants/theme';
@@ -13,6 +13,50 @@ import { useOfflineSync } from '@/lib/useOfflineSync';
 
 const formatDate = (iso: string) => new Date(iso).toLocaleString();
 const shortId = (id: string) => (id ? `…${id.slice(-8)}` : 'unknown');
+
+// The user's own scans (works for students AND teachers).
+async function loadOwnScans(userId: string): Promise<HistoryRow[]> {
+  const queued = await getPendingRows(userId);
+  let saved: HistoryRow[];
+  try {
+    saved = await fetchStudentHistory(userId);
+  } catch {
+    // Fallback to the original query if the join/status column isn't available.
+    const old = await getAttendanceHistory(userId);
+    saved = old.map((r) => ({
+      id: String(r.id),
+      title: r.eventTitle,
+      code: r.eventId,
+      scannedAt: r.scannedAt,
+      status: 'present' as const,
+    }));
+  }
+  return [...queued, ...saved];
+}
+
+function ScanCard({ item }: { item: HistoryRow }) {
+  const late = item.status === 'late';
+  return (
+    <View style={styles.card}>
+      <View style={styles.rowTop}>
+        <Text style={[styles.eventTitle, { flex: 1 }]}>{item.title}</Text>
+        <View style={[styles.badge, { backgroundColor: (late ? COLORS.warning : COLORS.success) + '22' }]}>
+          <Text style={[styles.badgeText, { color: late ? COLORS.warning : COLORS.success }]}>
+            {late ? 'Late' : 'Present'}
+          </Text>
+        </View>
+      </View>
+      <Text style={styles.eventMeta}>{item.code}</Text>
+      <Text style={styles.eventMeta}>{formatDate(item.scannedAt)}</Text>
+      {item.pending && (
+        <View style={styles.pendingRow}>
+          <Ionicons name="cloud-upload-outline" size={14} color={COLORS.accent} />
+          <Text style={styles.pendingText}>Waiting to sync</Text>
+        </View>
+      )}
+    </View>
+  );
+}
 
 export default function HistoryScreen() {
   const { user } = useAuth();
@@ -29,22 +73,13 @@ export default function HistoryScreen() {
       const currentRole = (await getProfile(user.id))?.role ?? 'student';
       setRole(currentRole);
 
+      // Everyone sees the events they scanned themselves.
+      setRows(await loadOwnScans(user.id));
+
+      // Teachers also see the events they created and who attended.
       if (currentRole === 'teacher') {
         setTeacherEvents(await getTeacherEventAttendance(user.id));
-        setRows([]);
       } else {
-        const queued = await getPendingRows(user.id);
-        let saved: HistoryRow[];
-        try {
-          saved = await fetchStudentHistory(user.id);
-        } catch {
-          // Fallback to the original query if the join/status column isn't available.
-          const old = await getAttendanceHistory(user.id);
-          saved = old.map((r) => ({
-            id: String(r.id), title: r.eventTitle, code: r.eventId, scannedAt: r.scannedAt, status: 'present' as const,
-          }));
-        }
-        setRows([...queued, ...saved]);
         setTeacherEvents([]);
       }
     } catch (error) {
@@ -56,73 +91,46 @@ export default function HistoryScreen() {
 
   useFocusEffect(useCallback(() => { loadHistory(); }, [loadHistory, pending]));
 
-  if (role === 'teacher') {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>My Events</Text>
-        {loading ? (
-          <Text style={styles.subtitle}>Loading events...</Text>
-        ) : teacherEvents.length === 0 ? (
-          <Text style={styles.subtitle}>No events created yet.</Text>
-        ) : (
-          <FlatList
-            data={teacherEvents}
-            keyExtractor={(item) => item.eventId}
-            contentContainerStyle={styles.list}
-            renderItem={({ item }) => (
-              <View style={styles.card}>
-                <Text style={styles.eventTitle}>{item.title}</Text>
-                <Text style={styles.eventMeta}>Event Code: {item.eventCode}</Text>
-                <Text style={styles.eventMeta}>Attendees: {item.attendeeCount}</Text>
-                {item.attendees.map((a) => (
-                  <Text key={`${item.eventId}-${a.studentId}-${a.scannedAt}`} style={styles.eventMeta}>
-                    Student: {shortId(a.studentId)} · {formatDate(a.scannedAt)}
-                  </Text>
-                ))}
-              </View>
-            )}
-          />
-        )}
-      </View>
-    );
-  }
+  const isTeacher = role === 'teacher';
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Attendance History</Text>
+      <Text style={styles.title}>{isTeacher ? 'History' : 'Attendance History'}</Text>
+
       {loading ? (
         <Text style={styles.subtitle}>Loading records...</Text>
-      ) : rows.length === 0 ? (
-        <Text style={styles.subtitle}>No records yet. Scan a QR code to register your attendance.</Text>
       ) : (
-        <FlatList
-          data={rows}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => {
-            const late = item.status === 'late';
-            return (
-              <View style={styles.card}>
-                <View style={styles.rowTop}>
-                  <Text style={[styles.eventTitle, { flex: 1 }]}>{item.title}</Text>
-                  <View style={[styles.badge, { backgroundColor: (late ? COLORS.warning : COLORS.success) + '22' }]}>
-                    <Text style={[styles.badgeText, { color: late ? COLORS.warning : COLORS.success }]}>
-                      {late ? 'Late' : 'Present'}
-                    </Text>
+        <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+          {isTeacher && <Text style={styles.sectionTitle}>My Scans</Text>}
+
+          {rows.length === 0 ? (
+            <Text style={styles.subtitle}>No records yet. Scan a QR code to register your attendance.</Text>
+          ) : (
+            rows.map((item) => <ScanCard key={item.id} item={item} />)
+          )}
+
+          {isTeacher && (
+            <>
+              <Text style={[styles.sectionTitle, { marginTop: 18 }]}>Events I Created</Text>
+              {teacherEvents.length === 0 ? (
+                <Text style={styles.subtitle}>No events created yet.</Text>
+              ) : (
+                teacherEvents.map((item) => (
+                  <View key={item.eventId} style={styles.card}>
+                    <Text style={styles.eventTitle}>{item.title}</Text>
+                    <Text style={styles.eventMeta}>Event Code: {item.eventCode}</Text>
+                    <Text style={styles.eventMeta}>Attendees: {item.attendeeCount}</Text>
+                    {item.attendees.map((a) => (
+                      <Text key={`${item.eventId}-${a.studentId}-${a.scannedAt}`} style={styles.eventMeta}>
+                        Student: {shortId(a.studentId)} · {formatDate(a.scannedAt)}
+                      </Text>
+                    ))}
                   </View>
-                </View>
-                <Text style={styles.eventMeta}>{item.code}</Text>
-                <Text style={styles.eventMeta}>{formatDate(item.scannedAt)}</Text>
-                {item.pending && (
-                  <View style={styles.pendingRow}>
-                    <Ionicons name="cloud-upload-outline" size={14} color={COLORS.accent} />
-                    <Text style={styles.pendingText}>Waiting to sync</Text>
-                  </View>
-                )}
-              </View>
-            );
-          }}
-        />
+                ))
+              )}
+            </>
+          )}
+        </ScrollView>
       )}
     </View>
   );
@@ -131,7 +139,8 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background, paddingHorizontal: 20, paddingTop: 24 },
   title: { fontSize: 22, fontWeight: '800', color: COLORS.textPrimary, marginBottom: 16 },
-  subtitle: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 20, marginTop: 32 },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: COLORS.textPrimary, marginBottom: 10 },
+  subtitle: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 20, marginTop: 16, marginBottom: 8 },
   list: { paddingBottom: 24 },
   card: { ...SHADOW.card, backgroundColor: COLORS.card, borderRadius: 16, padding: 16, marginBottom: 14 },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
